@@ -101,7 +101,7 @@ public class LobbyManager : NetworkBehaviour
     }
 
     private void HostOnBtnStartClick() {
-        Debug.Log("Start Game");        
+        StartGame();        
     }
 
     private void HostOnClientConnected(ulong clientId) {
@@ -116,6 +116,16 @@ public class LobbyManager : NetworkBehaviour
     // -----------------------
     // Public
     // -----------------------
+
+    public void StartGame()
+    {
+        var scene = NetworkManager.SceneManager.LoadScene(
+            "Arena1",
+            UnityEngine.SceneManagement.LoadSceneMode.Single);
+
+        btnStart.enabled = false;
+    }
+
     [ServerRpc(RequireOwnership = false)]
     public void ToggleReadyServerRpc(ServerRpcParams serverRpcParams = default) {
         ulong clientId = serverRpcParams.Receive.SenderClientId;

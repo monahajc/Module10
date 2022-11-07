@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -8,25 +9,100 @@ public class Player : NetworkBehaviour {
     public NetworkVariable<Vector3> PositionChange = new NetworkVariable<Vector3>();
     public NetworkVariable<Vector3> RotationChange = new NetworkVariable<Vector3>();
     public NetworkVariable<Color> PlayerColor = new NetworkVariable<Color>(Color.red);
+    public NetworkVariable<int> Score = new NetworkVariable<int>(50);
 
     private GameManager _gameMgr;
     private Camera _camera;
     public float movementSpeed = .5f;
-    private float rotationSpeed = 1f;
+    private float rotationSpeed = 4f;
     private BulletSpawner _bulletSpawner;
+
+    public TMPro.TMP_Text txtScoreDisplay;
 
     private void Start() {
         ApplyPlayerColor();
         PlayerColor.OnValueChanged += OnPlayerColorChanged;
         _bulletSpawner = transform.Find("RArm").transform.Find("BulletSpawner").GetComponent<BulletSpawner>();
     }
+    void Update() {
+        if (IsOwner) {
+            Vector3[] results = CalcMovement();
+            RequestPositionForMovementServerRpc(results[0], results[1]);
+            if (Input.GetButtonDown("Fire1")) {
+                _bulletSpawner.FireServerRpc();
+            }
+        }
 
+        if(!IsOwner || IsHost){
+            transform.Translate(PositionChange.Value);
+            transform.Rotate(RotationChange.Value);
+        }
+    }
+
+    //----------------
+    // Public
+    //----------------
     public override void OnNetworkSpawn() {
         _camera = transform.Find("Camera").GetComponent<Camera>();
         _camera.enabled = IsOwner;
+        
+        Score.OnValueChanged += ClientOnScoreChanged;
+        DisplayScore();
     }
 
 
+    public void ApplyPlayerColor() {
+        GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
+        transform.Find("LArm").GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
+        transform.Find("RArm").GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
+    }
+    public void DisplayScore()
+    {
+        txtScoreDisplay.text = Score.Value.ToString();
+    }
+
+    //----------------
+    // Private
+    //----------------
+
+    private void HostHandleBulletCollider(GameObject bullet)
+    {
+        Score.Value -= 1;
+        ulong ownerClientId = bullet.GetComponent<NetworkObject>().OwnerClientId;
+        Player otherPlayer = 
+            NetworkManager.Singleton.ConnectedClients[ownerClientId].PlayerObject.GetComponent<Player>();
+        otherPlayer.Score.Value += 1;
+        Destroy(bullet);
+    }
+    
+    //----------------
+    //Events
+    //----------------
+    
+    private void ClientOnScoreChanged(int previous, int current)
+    {
+        DisplayScore();
+        
+    }
+    
+    public void OnPlayerColorChanged(Color previous, Color current) {
+        ApplyPlayerColor();
+    }
+
+    public void OnCollisionEnter(Collision collision)
+    {
+        if (IsHost)
+        {
+            if (collision.gameObject.CompareTag("Bullet"))
+            {
+                HostHandleBulletCollider(collision.gameObject);
+            }
+        }
+    }
+
+    //----------------
+    //RPC
+    //----------------
     [ServerRpc]
     void RequestPositionForMovementServerRpc(Vector3 posChange, Vector3 rotChange) {
         if (!IsServer && !IsHost) return;
@@ -34,19 +110,7 @@ public class Player : NetworkBehaviour {
         PositionChange.Value = posChange;
         RotationChange.Value = rotChange;
     }
-
-
-    public void OnPlayerColorChanged(Color previous, Color current) {
-        ApplyPlayerColor();
-    }
-
-    public void ApplyPlayerColor() {
-        GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
-        transform.Find("LArm").GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
-        transform.Find("RArm").GetComponent<MeshRenderer>().material.color = PlayerColor.Value;
-    }
-
-
+    
     // horiz changes y rotation or x movement if shift down, vertical moves forward and back.
     private Vector3[] CalcMovement() {
         bool isShiftKeyDown = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
@@ -68,20 +132,6 @@ public class Player : NetworkBehaviour {
 
         return new[] { moveVect, rotVect };
     }
-
-
-    void Update() {
-        if (IsOwner) {
-            Vector3[] results = CalcMovement();
-            RequestPositionForMovementServerRpc(results[0], results[1]);
-            if (Input.GetButtonDown("Fire1")) {
-                _bulletSpawner.FireServerRpc();
-            }
-        }
-
-        if(!IsOwner || IsHost){
-            transform.Translate(PositionChange.Value);
-            transform.Rotate(RotationChange.Value);
-        }
-    }
+    
+    
 }
