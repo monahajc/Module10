@@ -22,7 +22,7 @@ public class Player : NetworkBehaviour {
     private void Start() {
         ApplyPlayerColor();
         PlayerColor.OnValueChanged += OnPlayerColorChanged;
-        _bulletSpawner = transform.Find("RArm").transform.Find("BulletSpawner").GetComponent<BulletSpawner>();
+       
     }
     void Update() {
         if (IsOwner) {
@@ -47,6 +47,11 @@ public class Player : NetworkBehaviour {
         _camera.enabled = IsOwner;
         
         Score.OnValueChanged += ClientOnScoreChanged;
+        _bulletSpawner = transform.Find("RArm").transform.Find("BulletSpawner").GetComponent<BulletSpawner>();
+        if (IsHost)
+        {
+            _bulletSpawner.BulletDamage.Value = 1;
+        }
         DisplayScore();
     }
 
@@ -67,12 +72,23 @@ public class Player : NetworkBehaviour {
 
     private void HostHandleBulletCollider(GameObject bullet)
     {
-        Score.Value -= 1;
+        Bullet bulletScript = bullet.GetComponent<Bullet>();
+        Score.Value -= bulletScript.Damage.Value;
+
         ulong ownerClientId = bullet.GetComponent<NetworkObject>().OwnerClientId;
         Player otherPlayer = 
             NetworkManager.Singleton.ConnectedClients[ownerClientId].PlayerObject.GetComponent<Player>();
         otherPlayer.Score.Value += 1;
         Destroy(bullet);
+    }
+
+    private void HostHandleDamageBoostPickup(Collider other)
+    {
+        if(!_bulletSpawner.IsAtMaxDamage())
+        {
+            _bulletSpawner.IncreaseDamage();
+            other.GetComponent<NetworkObject>().Despawn();
+        }
     }
     
     //----------------
@@ -96,6 +112,17 @@ public class Player : NetworkBehaviour {
             if (collision.gameObject.CompareTag("Bullet"))
             {
                 HostHandleBulletCollider(collision.gameObject);
+            }
+        }
+    }
+
+    public void OnTriggerEnter(Collider other)
+    {
+        if (IsHost)
+        {
+            if (other.gameObject.CompareTag("DamageBoost"))
+            {
+                HostHandleDamageBoostPickup(other);
             }
         }
     }
