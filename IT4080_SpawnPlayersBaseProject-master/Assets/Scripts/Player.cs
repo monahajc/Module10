@@ -80,6 +80,11 @@ public class Player : NetworkBehaviour {
             NetworkManager.Singleton.ConnectedClients[ownerClientId].PlayerObject.GetComponent<Player>();
         otherPlayer.Score.Value += 1;
         Destroy(bullet);
+
+        if (otherPlayer.Score.Value <= 0)
+        {
+            HostHandleGameOver(otherPlayer);
+        }
     }
 
     private void HostHandleDamageBoostPickup(Collider other)
@@ -89,6 +94,12 @@ public class Player : NetworkBehaviour {
             _bulletSpawner.IncreaseDamage();
             other.GetComponent<NetworkObject>().Despawn();
         }
+    }
+
+    private void HostHandleGameOver(Player player)
+    {
+        Destroy(player);
+
     }
     
     //----------------
